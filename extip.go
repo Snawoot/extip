@@ -20,6 +20,9 @@ type InconclusiveResult struct {
     // Map with error for each failed server
     Errors map[string]error
 
+    // Map with result for each server
+    Results map[string]string
+
     // Quorum set for matching responses
     Quorum uint
 }
@@ -28,9 +31,10 @@ func (_ InconclusiveResult) Error() string {
     return "inconclusive result: quorum not reached"
 }
 
-func newInconclusiveResult(errMap map[string]error, quorum uint) InconclusiveResult {
+func newInconclusiveResult(errMap map[string]error, resMap map[string]string, quorum uint) InconclusiveResult {
     return InconclusiveResult{
         Errors: errMap,
+        Results: resMap,
         Quorum: quorum,
     }
 }
@@ -38,6 +42,11 @@ func newInconclusiveResult(errMap map[string]error, quorum uint) InconclusiveRes
 type peerError struct {
     server string
     err error
+}
+
+type peerResult struct {
+    server string
+    res string
 }
 
 // Query external IP address from single server
@@ -94,6 +103,7 @@ func QuerySingleServer(ctx context.Context, server string, ipv6 bool) (string, e
 
 // Query multiple servers and determine result by quorum of successful responses.
 // List of servers can be a nil slice. In this case public server list will be used.
+// Recommended quorum value is 2.
 func QueryMultipleServers(ctx context.Context, servers []string, quorum uint, ipv6 bool) (string, error) {
     if servers == nil {
         servers = PublicServerList
@@ -106,7 +116,7 @@ func QueryMultipleServers(ctx context.Context, servers []string, quorum uint, ip
         return "", errors.New("quorum is higher than server list length")
     }
 
-    clientRes := make(chan string)
+    clientRes := make(chan peerResult)
     clientErr := make(chan peerError)
     for _, server := range servers {
         go func(srv string) {
@@ -114,12 +124,13 @@ func QueryMultipleServers(ctx context.Context, servers []string, quorum uint, ip
             if err != nil {
                 clientErr <- peerError{srv, err}
             } else {
-                clientRes <- res
+                clientRes <- peerResult{srv, res}
             }
         }(server)
     }
 
-    resultMap := make(map[string]uint)
+    resultCounter := make(map[string]uint)
+    resultMap := make(map[string]string)
     errorMap := make(map[string]error)
 
     for i := 0; i < count; i++ {
@@ -127,11 +138,12 @@ func QueryMultipleServers(ctx context.Context, servers []string, quorum uint, ip
         case err := <-clientErr:
             errorMap[err.server] = err.err
         case res := <-clientRes:
-            resultMap[res]++
-            if resultMap[res] >= quorum {
-                return res, nil
+            resultCounter[res.res]++
+            if resultCounter[res.res] >= quorum {
+                return res.res, nil
             }
+            resultMap[res.server] = res.res
         }
     }
-    return "", newInconclusiveResult(errorMap, quorum)
+    return "", newInconclusiveResult(errorMap, resultMap, quorum)
 }
