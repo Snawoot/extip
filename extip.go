@@ -16,6 +16,30 @@ var PublicServerList = []string{
     "stun.voipstunt.com:3478",
 }
 
+type InconclusiveResult struct {
+    // Map with error for each failed server
+    Errors map[string]error
+
+    // Quorum set for matching responses
+    Quorum uint
+}
+
+func (_ InconclusiveResult) Error() string {
+    return "inconclusive result: quorum not reached"
+}
+
+func newInconclusiveResult(errMap map[string]error, quorum uint) InconclusiveResult {
+    return InconclusiveResult{
+        Errors: errMap,
+        Quorum: quorum,
+    }
+}
+
+type peerError struct {
+    server string
+    err error
+}
+
 // Query external IP address from single server
 func QuerySingleServer(ctx context.Context, server string, ipv6 bool) (string, error) {
     family := "udp4"
@@ -83,12 +107,12 @@ func QueryMultipleServers(ctx context.Context, servers []string, quorum uint, ip
     }
 
     clientRes := make(chan string)
-    clientErr := make(chan error)
+    clientErr := make(chan peerError)
     for _, server := range servers {
         go func(srv string) {
             res, err := QuerySingleServer(ctx, srv, ipv6)
             if err != nil {
-                clientErr <- err
+                clientErr <- peerError{srv, err}
             } else {
                 clientRes <- res
             }
@@ -96,12 +120,12 @@ func QueryMultipleServers(ctx context.Context, servers []string, quorum uint, ip
     }
 
     resultMap := make(map[string]uint)
-    var errorList []error
+    errorMap := make(map[string]error)
 
     for i := 0; i < count; i++ {
         select {
         case err := <-clientErr:
-            errorList = append(errorList, err)
+            errorMap[err.server] = err.err
         case res := <-clientRes:
             resultMap[res]++
             if resultMap[res] >= quorum {
@@ -109,5 +133,5 @@ func QueryMultipleServers(ctx context.Context, servers []string, quorum uint, ip
             }
         }
     }
-    return "", errors.New("no conclusive result was retrieved")
+    return "", newInconclusiveResult(errorMap, quorum)
 }
