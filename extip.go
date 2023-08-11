@@ -9,7 +9,6 @@ import (
 var PublicServerList = []string{
     "stun.l.google.com:19302",
     "stun.ekiga.net:3478",
-    "stun.ideasip.com:3478",
     "stun.schlund.de:3478",
     "stun.voiparound.com:3478",
     "stun.voipbuster.com:3478",
