@@ -13,6 +13,11 @@ var PublicServerList = []string{
 	"stun.schlund.de:3478",
 	"stun.voipbuster.com:3478",
 	"stun.voipstunt.com:3478",
+	"stun.voipawesome.com:3478",
+	"stun.counterpath.com:3478",
+	"stun.freeswitch.org:3478",
+	"stun.sipgate.net:3478",
+	"stun.cloudflare.com:3478",
 }
 
 type InconclusiveResult struct {
