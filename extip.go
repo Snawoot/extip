@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"gortc.io/stun"
+	"github.com/pion/stun/v3"
 )
 
 var PublicServerList = []string{
